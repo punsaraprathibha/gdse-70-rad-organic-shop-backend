@@ -85,18 +85,18 @@ npm install -D nodemon
 12. Then you need to add following `nodemon.json` file of defining instructions.
 ```json
 {
-  "watch": ["src"],
-  "ext": "ts",
-  "ignore": ["src/**/*.spec.ts"],
-  "exec": "ts-node ./src/index.ts"
+  "watch": ["src"], // Tells Nodemon which folders to watch for file changes.
+  "ext": "ts", // Tells Nodemon to watch only files with the .ts extension (TypeScript files).
+  "ignore": ["src/**/*.spec.ts"], // Tells Nodemon to ignore specific files, even if they match the watch and ext rules.
+  "exec": "ts-node ./src/index.ts" // Tells Nodemon what command to run when starting/restarting the app.
 }
 ```
 13. Then let's update the scripts in the `package.json` as below.
 ```json
 "scripts": {
   "dev": "nodemon", // Instructs nodemon to take control of running the command
-  "build": "tsc",
-  "start": "node dist/index.js"
+  "build": "tsc", // Perform a production ready build
+  "start": "node dist/index.js" // run application in production mode
 }
 ```
 14. Then you need to restart the app using following command.
