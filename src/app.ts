@@ -28,11 +28,5 @@ app.use(cors(corsOptions)); // Enable/Allow CORS according to defined options
 
 app.use("/api/products", productRoutes)
 
-// 3. Define a simple HTTP GET Request
-// app.get('/', (req: Request, res: Response) => {
-//     console.log(req.body);
-//     res.send("Hello World!");
-// });
-
 // Expert the app to use outside (in index.ts)
 export default app;
