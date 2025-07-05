@@ -1,156 +1,269 @@
-## Creating a Node.js backend using Express as the server with Typescript
-
-1. Create an empty project using intelliJ IDEA.
-   `File -> New -> Project -> Empty Project`
-2. Then open a terminal and execute the following command to initialize a `package.json` file.
-```shell
-npm init -y
-```
-3. As per next step, let's install `express` and `typescript`.
-```shell
-npm install express
-npm install -D typescript ts-node @types/node @types/express
-```
-4. In npm, there are two types of dependencies:
-
-| Type                                         | Use                                                                                                     |
-| -------------------------------------------- |---------------------------------------------------------------------------------------------------------|
-| `"dependencies"` (`npm install <pkg>`)       | Dependencies which are needed to **run the app** in production.                                         |
-| `"devDependencies"` (`npm install -D <pkg>`) | Dependencies which are needed **only during development** (like building, testing, linting, compiling) — not needed at runtime. |
-
-5. Then create a `tsconfig.json` file using following command.
-```shell
-npx tsc --init
-```
-5. Then replace the `tsconfig.json` file with the following.
-```json
-{
-  "compilerOptions": {
-    "target": "ES6",
-    "module": "commonjs",
-    "outDir": "./dist", // Output folder for the deployment ready code generated 
-    "rootDir": "./src", // Root directory of the app
-    "strict": true,
-    "esModuleInterop": true
-  }
-}
-```
-6. Then inside `src` folder, let's create a file called `index.ts`.
-7. Then let's create and configure our express server inside this file.
+01. Here you can see the result difference when you defined and not defined this middleware `app.use(express.json())`.
 ```typescript
-import express, { Request, Response, Express } from 'express';
+app.use(express.json()); // Comment and uncomment to see the difference
 
-// 1. Initialize the express app
-const app:Express = express();
-// 2. Define the application port
-const port = 3000;
-
-// 3. Define a simple HTTP GET Request
 app.get('/', (req: Request, res: Response) => {
-  res.send('Hello!');
-});
-
-// 4. Instructs the express app to listen on port 3000
-app.listen(port, () => {
-  console.log(`Server is running at http://localhost:${port}`);
-});
-```
-8. Then let's define the following scripts in `package.json`.
-```json
-"scripts": {
-  "dev": "ts-node src/index.ts", // Dev run command
-  "build": "tsc", // Build command
-  "serve": "node dist/index.js" // Run in production mode
-}
-```
-9. Here `ts-node`:
-    * Runs .ts files directly, skipping manual compile → helpful for development time.
-    * In production, you don’t use it — you run the compiled .js.
-    * So it’s a → devDependency
-10. Then we can run the application locally using following command.
-```shell
-npm run dev
-```
-10. Then let's try to update text that returns in the
-    response of the get request and see whether realtime updates are realtime reflects.
-9. As you can see, it is not, where the server is not restarting due to changes we've done just like React.
-10. So, let's make that possible using following dependency as a Dev dependency.
-```shell
-npm install -D nodemon
-```
-11. So, in here,
-    typescript -> Needed to compile .ts files → .js
-    * Not needed after code is compiled — the server runs .js
-    * So it’s a build-time tool → devDependency
-12. Then you need to add following `nodemon.json` file of defining instructions.
-```json
-{
-  "watch": ["src"], // Tells Nodemon which folders to watch for file changes.
-  "ext": "ts", // Tells Nodemon to watch only files with the .ts extension (TypeScript files).
-  "ignore": ["src/**/*.spec.ts"], // Tells Nodemon to ignore specific files, even if they match the watch and ext rules.
-  "exec": "ts-node ./src/index.ts" // Tells Nodemon what command to run when starting/restarting the app.
-}
-```
-13. Then let's update the scripts in the `package.json` as below.
-```json
-"scripts": {
-  "dev": "nodemon", // Instructs nodemon to take control of running the command
-  "build": "tsc", // Perform a production ready build
-  "start": "node dist/index.js" // run application in production mode
-}
-```
-14. Then you need to restart the app using following command.
-```shell
-npm run dev
-```
-15. Now, changes would be reflected real time.
-16. Now, let's move the app related changes to a separate file called `app.ts`.
-
-```typescript
-// app.ts
-import express, {Express, Request, Response} from "express";
-
-// 1. Initialize the express app
-const app: Express = express();
-
-// 2. Define a simple HTTP GET Request
-app.get('/', (req: Request, res: Response) => {
+    console.log(req.body); // Add console.log here to see the result
     res.send("Hello World!");
 });
-
-// 3. Expert the app to use outside (in index.ts)
-export default app;
 ```
-
+02. Also, we can separate out the application properties to a separate property file.
+03. For that, we need to install `dotenv`.
+```shell
+npm install dotenv
+```
+04. Then let's create a new file called `.env` and define the application port there.
+```dotenv
+PORT=3000
+```
+05. Then we can access it inside our application like below.
 ```typescript
-// index.ts
 import app from "./app";
+import dotenv from "dotenv"; // Import dotenv
 
-// 1. Define the application port
-const port = 3000;
+dotenv.config(); // Loads the environment variables from the file
 
-// 2. Instructs the express app to listen on port 3000
+const port = process.env.PORT; // Access the port defined in .env
+
 app.listen(port, () => {
-    console.log(`Server is running at http://localhost:${port}`)
+    console.log(`Server is running at http://localhost:${port}`);
 });
 ```
-17. Next, we can define several Middlewares for different purposes as below.
+06. So, for defining `productRoutes`, let's create a new file called `product.routes.ts` inside new folder `routes`.
+    We can use express `Router()` to define routes.
 ```typescript
-import express, {Express, Request, Response} from "express";
+import {Router} from "express";
+import {deleteProduct, getAllProducts, getProduct, saveProduct, updateProduct} from "../controller/product.controller";
 
-// 1. Initialize the express app
-const app: Express = express();
+const productRouter: Router = Router();
 
-// 2. Define Middlewares
+productRouter.get("/all", getAllProducts);
+productRouter.post("/save", saveProduct);
+productRouter.get("/:id", getProduct);
+productRouter.put("/update/:id", updateProduct);
+productRouter.delete("/delete/:id", deleteProduct);
 
-// 2.1 Instruct to parse the request payload data to be converted to JSON format
+export default productRouter;
+```
+07. Now, let's define routes of our application as a middleware in `app.ts`.
+```typescript
+import express, {Express} from "express";
+import productRoutes from "./routes/product.routes";
+
+// Initialize the express app
+const app:Express = express();
+
+// Middlewares
+
+// Instruct to parse the payload to JSON to be easily accessible data
 app.use(express.json());
 
-// 3. Define a simple HTTP GET Request
-app.get('/', (req: Request, res: Response) => {
-    res.send("Hello World!");
-});
+// Define application Routes
+app.use("/products", productRoutes);
 
-// 4. Expert the app to use outside (in index.ts)
 export default app;
+```
+08. Also, let's create a new file called `product.model.ts` inside a folder called `model` to have models.
+```typescript
+export interface Product {
+    id: number;
+    name: string;
+    price: number;
+    currency: string;
+    image: string;
+}
+```
+09. Let's create a new file called `db.ts` inside a new folder called `db` to have stored the data temporary as a static array.
+```typescript
+import {Product} from "../model/product.model";
+
+export const productList: Product[] = [];
+```
+10. Now, let's create a new folder called `controller` and create a file called `product.controller.ts` to include all the controller functions to handle relevant logic for requests and responses.
+```typescript
+import { Request, Response } from 'express';
+import * as productService from '../services/product.service';
+
+// Controller method to save new product
+export const saveProduct = (req: Request, res: Response) => {
+    try {
+        const newProduct = req.body;
+        const validationError = productService.validateProduct(newProduct);
+        if (validationError) {
+            res.status(400).json({error: validationError});
+            return;
+        }
+
+        const savedProduct = productService.saveProduct(newProduct);
+        res.status(201).json(savedProduct);
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({error: 'Something went wrong!'});
+    }
+}
+
+// Controller method to get all products
+export const getAllProducts = (req: Request, res: Response) => {
+    try {
+        const products = productService.getAllProducts();
+        res.status(200).json(products);
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({error: 'Something went wrong!'});
+    }
+}
+
+// Controller method to get product by id
+export const getProduct = (req: Request, res: Response) => {
+    try {
+        const productId = parseInt(req.params.id);
+        if (isNaN(productId)) {
+            res.status(400).json({error: 'Invalid product ID'});
+            return;
+        }
+        const product = productService.getProductById(productId);
+        if (!product) {
+            res.status(404).json({error: 'Product not found'});
+            return;
+        }
+        res.status(200).json(product);
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({error: 'Something went wrong!'});
+    }
+}
+
+// Controller method to update product by id
+export const updateProduct = (req: Request, res: Response) => {
+    try {
+        const productId = parseInt(req.params.id);
+        if (isNaN(productId)) {
+            res.status(400).json({error: 'Invalid product ID'});
+            return;
+        }
+
+        const updatedData = req.body;
+        const updatedProduct = productService.updateProduct(productId, updatedData);
+
+        if (!updatedProduct) {
+            res.status(404).json({error: 'Product not found'});
+            return;
+        }
+
+        res.status(200).json(updatedProduct);
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({error: 'Something went wrong!'});
+    }
+}
+
+// Controller method to delete product by id
+export const deleteProduct = (req: Request, res: Response) => {
+    try {
+        const productId = parseInt(req.params.id);
+        if (isNaN(productId)) {
+            res.status(400).json({ error: 'Invalid product ID' });
+            return;
+        }
+
+        const deleted = productService.deleteProduct(productId);
+        if (!deleted) {
+            res.status(404).json({ error: 'Product not found' });
+            return;
+        }
+
+        res.status(200).json({ message: 'Product deleted successfully' });
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({error: 'Something went wrong!'});
+    }
+}
+```
+11. Now let's define service layer to include the business logic.
+    For that let's create a new folder called `services` and create a file called `product.service.ts`.
+```typescript
+import {productList} from "../db/db";
+import {Product} from "../model/product.model";
+
+export const saveProduct = (product: Product): Product => {
+    productList.push(product);
+    return product;
+};
+
+export const getAllProducts = (): Product[] => {
+    return productList;
+};
+
+export const getProductById = (id: number): Product | undefined => {
+    return productList.find(product => product.id === id);
+};
+
+export const updateProduct = (id: number, data: Partial<Product>): Product | null => {
+    const product = productList.find(p => p.id === id);
+    if (!product) return null;
+
+    Object.assign(product, data);
+    return product;
+};
+
+export const deleteProduct = (id: number): boolean => {
+    const index = productList.findIndex(product => product.id === id);
+    if (index === -1) return false;
+
+    productList.splice(index, 1);
+    return true;
+};
+
+export const validateProduct = (product: Product): string | null => {
+    if (!product.id || !product.name || !product.price || !product.currency || !product.image) {
+        return 'All fields are required.';
+    }
+    return null;
+};
+```
+12. Now let's go to the frontend side to do the frontend-backend integration.
+13. Now let's enable `CORS` from the backend.
+14. For that we need to install `cors`.
+```shell
+npm install cors
+```
+15. Then we can just allow CORS simply as below in `app.ts` as a middleware.
+```typescript
+import express, {Express} from "express";
+import productRoutes from "./routes/product.routes";
+import cors from "cors"; // Import CORS
+
+const app:Express = express();
+
+// Middlewares
+
+app.use(express.json());
+
+app.use(cors()); // Allow CORS here
+
+// Define application Routes
+app.use("/api/products", productRoutes);
+
+export default app;
+```
+16. We can restrict the access by defining the allowed origins for more security.
+```typescript
+// Define allowed origins
+const allowedOrigins = [
+  "http://localhost:5173", // Local frontend
+];
+
+// CORS options
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    if (!origin || allowedOrigins.includes(origin)) { // The request has no origin — typically from non-browser tools (like Postman or curl). These are allowed.
+      callback(null, true); // allow the request
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  }
+};
+
+// Apply CORS middleware
+app.use(cors(corsOptions));
 ```
