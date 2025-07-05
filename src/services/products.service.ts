@@ -36,8 +36,8 @@ export const deleteProduct = (id: number) => {
 }
 
 export const validateProduct = (product: Product) => {
-    if (!product.id || !product.name || product.price
-        || product.currency || product.image) {
+    if (!product.id || !product.name || !product.price
+        || !product.currency || !product.image) {
         return 'All fields are required!';
     }
     return null;
