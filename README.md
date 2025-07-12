@@ -1,71 +1,95 @@
-01. Here you can see the result difference when you defined and not defined this middleware `app.use(express.json())`.
-```typescript
-app.use(express.json()); // Comment and uncomment to see the difference
-
-app.get('/', (req: Request, res: Response) => {
-    console.log(req.body); // Add console.log here to see the result
-    res.send("Hello World!");
-});
-```
-02. Also, we can separate out the application properties to a separate property file.
-03. For that, we need to install `dotenv`.
+01. Now let's configure MongoDB configurations inorder to communicate with our MongoDB database.
+02. For that firstly, let's go to mongodb official website to create an account.
+    ```https://account.mongodb.com/account/login```
+03. Then choose your signup method and sign up to the MongoDB site, and it will redirect you to MongoDB dashboard.
+04. Then you'll have to create a new project and provide project name, additional users to access the project and click create.
+05. Then you need to create a deployment. So, click ```+Create``` button and select a free cluster and select service provider, region, and the name of the cluster and then click on create.
+06. Then please provide username and password you're going to use when accessing this cluster.
+07. Please remember and better to note down this password which we're going to use in future for connecting with DB.
+08. Then you've to define what are the server addresses (web app addresses) you're going to access this cluster.
+09. Then click connect button with green color and select Drivers
+10. Then define node version and copy the mongodb install command and run inside server.
 ```shell
-npm install dotenv
+npm install mongodb
 ```
-04. Then let's create a new file called `.env` and define the application port there.
+11. Then copy the connection string displayed in the site and define a new env variable inside dotEnv file and paste like below.
 ```dotenv
-PORT=3000
+MONGODB_URL=mongodb+srv://<cluster-username>:<cluster-password>@<cluster-name>.vj1hean.mongodb.net/?retryWrites=true&w=majority
 ```
-05. Then we can access it inside our application like below.
-```typescript
-import app from "./app";
-import dotenv from "dotenv"; // Import dotenv
-
-dotenv.config(); // Loads the environment variables from the file
-
-const port = process.env.PORT; // Access the port defined in .env
-
-app.listen(port, () => {
-    console.log(`Server is running at http://localhost:${port}`);
-});
+12. Now let's start db configuration to our application through the code.
+13. Install mongoose.
+```shell
+ npm i mongoose
 ```
-06. So, for defining `productRoutes`, let's create a new file called `product.routes.ts` inside new folder `routes`.
-    We can use express `Router()` to define routes.
+14. For that, let's firstly create a new package called `db` and place a file called `DBConnection.js` inside it to hold db configs.
 ```typescript
-import {Router} from "express";
-import {deleteProduct, getAllProducts, getProduct, saveProduct, updateProduct} from "../controller/product.controller";
+import mongoose from 'mongoose';
+import dotenv from 'dotenv';
 
-const productRouter: Router = Router();
+dotenv.config();
 
-productRouter.get("/all", getAllProducts);
-productRouter.post("/save", saveProduct);
-productRouter.get("/:id", getProduct);
-productRouter.put("/update/:id", updateProduct);
-productRouter.delete("/delete/:id", deleteProduct);
+const MONGO_DB_URL = process.env.MONGO_DB_URL as string;
+const DBConnection = async () => {
+    try {
+        console.log(MONGO_DB_URL);
+        const connection = await mongoose.connect(MONGO_DB_URL);
+        return `Successfully connected to MongoDB: ${connection.connection?.host}`;
+    } catch (error) {
+        return "Mongo DB Connection Error:" + error;
+    }
+}
 
-export default productRouter;
+export default DBConnection;
 ```
-07. Now, let's define routes of our application as a middleware in `app.ts`.
+15. Then you have to define in `index.js` to consume this newly created `DBConnection.js` at the startup time.
 ```typescript
-import express, {Express} from "express";
-import productRoutes from "./routes/product.routes";
-
-// Initialize the express app
-const app:Express = express();
-
-// Middlewares
-
-// Instruct to parse the payload to JSON to be easily accessible data
-app.use(express.json());
-
-// Define application Routes
-app.use("/products", productRoutes);
-
-export default app;
+import DBConnection from "./db/DBConnection";
+DBConnection().then(result => console.log(result));
 ```
-08. Also, let's create a new file called `product.model.ts` inside a folder called `model` to have models.
+16. Now if your configurations are successfully completed, you may see a message like below.
+```
+Successfully connected to MongoDB: <cluster>.<cluster-id>.mongodb.net
+```
+17. Now we're ready to access db from our application and do the CRUD operations.
+18. Before we do DB operations, we need to have a MongoDB model class which is same as entity with jpa.
+19. So, firstly let's create a model called `Product.ts` inside a package called `model`.
 ```typescript
-export interface Product {
+import mongoose from "mongoose";
+
+const ProductModel
+    = new mongoose.Schema(
+    {
+        "id": {
+            required: true, // like not null
+            type: Number,
+            unique: true, // Unique key constraint
+            index: true // For better performance
+        },
+        "name": {
+            required: true,
+            type: String
+        },
+        "price": {
+            required: true,
+            type: Number
+        },
+        "currency": {
+            required: true,
+            type: String
+        },
+        "image": {
+            required: true,
+            type: String
+        }
+    }
+);
+
+const Product = mongoose.model('Product', ProductModel);
+export default Product;
+```
+20. Then we've to create a dto called `product.dto.ts` inside a new folder called `dto`.
+```typescript
+export interface ProductDto {
     id: number;
     name: string;
     price: number;
@@ -73,197 +97,255 @@ export interface Product {
     image: string;
 }
 ```
-09. Let's create a new file called `db.ts` inside a new folder called `db` to have stored the data temporary as a static array.
+21. Then please update the `product.service.ts` as below to deal with MongoDB CRUD operations.
 ```typescript
-import {Product} from "../model/product.model";
+import Product from '../model/product.model';
+import {ProductDto} from "../dto/product.dto";
 
-export const productList: Product[] = [];
-```
-10. Now, let's create a new folder called `controller` and create a file called `product.controller.ts` to include all the controller functions to handle relevant logic for requests and responses.
-```typescript
-import { Request, Response } from 'express';
-import * as productService from '../services/product.service';
-
-// Controller method to save new product
-export const saveProduct = (req: Request, res: Response) => {
-    try {
-        const newProduct = req.body;
-        const validationError = productService.validateProduct(newProduct);
-        if (validationError) {
-            res.status(400).json({error: validationError});
-            return;
-        }
-
-        const savedProduct = productService.saveProduct(newProduct);
-        res.status(201).json(savedProduct);
-    } catch (error) {
-        console.log(error);
-        res.status(500).json({error: 'Something went wrong!'});
-    }
+// Get all products service logic
+export const getAllProducts = async ():Promise<ProductDto[]> => {
+    return Product.find();
 }
 
-// Controller method to get all products
-export const getAllProducts = (req: Request, res: Response) => {
-    try {
-        const products = productService.getAllProducts();
-        res.status(200).json(products);
-    } catch (error) {
-        console.log(error);
-        res.status(500).json({error: 'Something went wrong!'});
-    }
+export const saveProduct = async (product: ProductDto): Promise<any> => {
+    return Product.create(product);
 }
 
-// Controller method to get product by id
-export const getProduct = (req: Request, res: Response) => {
-    try {
-        const productId = parseInt(req.params.id);
-        if (isNaN(productId)) {
-            res.status(400).json({error: 'Invalid product ID'});
-            return;
-        }
-        const product = productService.getProductById(productId);
-        if (!product) {
-            res.status(404).json({error: 'Product not found'});
-            return;
-        }
-        res.status(200).json(product);
-    } catch (error) {
-        console.log(error);
-        res.status(500).json({error: 'Something went wrong!'});
-    }
+export const getProductById = async (id: number): Promise<any> => {
+    return Product.findOne({id: id});
 }
 
-// Controller method to update product by id
-export const updateProduct = (req: Request, res: Response) => {
-    try {
-        const productId = parseInt(req.params.id);
-        if (isNaN(productId)) {
-            res.status(400).json({error: 'Invalid product ID'});
-            return;
-        }
-
-        const updatedData = req.body;
-        const updatedProduct = productService.updateProduct(productId, updatedData);
-
-        if (!updatedProduct) {
-            res.status(404).json({error: 'Product not found'});
-            return;
-        }
-
-        res.status(200).json(updatedProduct);
-    } catch (error) {
-        console.log(error);
-        res.status(500).json({error: 'Something went wrong!'});
+export const updateProduct = async (id: number, data: ProductDto) => {
+    const product = await Product.findOneAndUpdate({id: id}, data, {new: true})
+    if (!product) {
+        return null;
     }
-}
-
-// Controller method to delete product by id
-export const deleteProduct = (req: Request, res: Response) => {
-    try {
-        const productId = parseInt(req.params.id);
-        if (isNaN(productId)) {
-            res.status(400).json({ error: 'Invalid product ID' });
-            return;
-        }
-
-        const deleted = productService.deleteProduct(productId);
-        if (!deleted) {
-            res.status(404).json({ error: 'Product not found' });
-            return;
-        }
-
-        res.status(200).json({ message: 'Product deleted successfully' });
-    } catch (error) {
-        console.log(error);
-        res.status(500).json({error: 'Something went wrong!'});
-    }
-}
-```
-11. Now let's define service layer to include the business logic.
-    For that let's create a new folder called `services` and create a file called `product.service.ts`.
-```typescript
-import {productList} from "../db/db";
-import {Product} from "../model/product.model";
-
-export const saveProduct = (product: Product): Product => {
-    productList.push(product);
     return product;
-};
+}
 
-export const getAllProducts = (): Product[] => {
-    return productList;
-};
-
-export const getProductById = (id: number): Product | undefined => {
-    return productList.find(product => product.id === id);
-};
-
-export const updateProduct = (id: number, data: Partial<Product>): Product | null => {
-    const product = productList.find(p => p.id === id);
-    if (!product) return null;
-
-    Object.assign(product, data);
-    return product;
-};
-
-export const deleteProduct = (id: number): boolean => {
-    const index = productList.findIndex(product => product.id === id);
-    if (index === -1) return false;
-
-    productList.splice(index, 1);
+export const deleteProduct = async (id: number) => {
+    await Product.deleteOne({id: id});
     return true;
-};
+}
 
-export const validateProduct = (product: Product): string | null => {
-    if (!product.id || !product.name || !product.price || !product.currency || !product.image) {
-        return 'All fields are required.';
+export const validateProduct = (product: ProductDto) => {
+    if (!product.id || !product.name || !product.price
+        || !product.currency || !product.image) {
+        return 'All fields are required!';
     }
     return null;
-};
+}
 ```
-12. Now let's go to the frontend side to do the frontend-backend integration.
-13. Now let's enable `CORS` from the backend.
-14. For that we need to install `cors`.
-```shell
-npm install cors
-```
-15. Then we can just allow CORS simply as below in `app.ts` as a middleware.
 ```typescript
-import express, {Express} from "express";
-import productRoutes from "./routes/product.routes";
-import cors from "cors"; // Import CORS
-
-const app:Express = express();
-
-// Middlewares
-
-app.use(express.json());
-
-app.use(cors()); // Allow CORS here
-
-// Define application Routes
-app.use("/api/products", productRoutes);
-
-export default app;
+Product.find();// Get All
+Product.create(productData); // Save
+Product.findOne({id: productId}); // Get by Id
+Product.findOneAndUpdate({id: productId}, productData, {new: true}) // Update by Id // {new: true}) - Return the updated document instead of the old original one;
+Product.deleteOne({id: productId}); // Delete by Id
 ```
-16. We can restrict the access by defining the allowed origins for more security.
+22. Then, you have to define controller functions as `async` and service calls with `await` keywords.
 ```typescript
-// Define allowed origins
-const allowedOrigins = [
-  "http://localhost:5173", // Local frontend
-];
+import {Request, Response} from "express";
+import * as productService from '../services/products.service';
 
-// CORS options
-const corsOptions = {
-  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    if (!origin || allowedOrigins.includes(origin)) { // The request has no origin — typically from non-browser tools (like Postman or curl). These are allowed.
-      callback(null, true); // allow the request
-    } else {
-      callback(new Error("Not allowed by CORS"));
+// Controller function to handle get all products
+export const getAllProducts = async (req: Request, res: Response) => {
+    try {
+        const products = await productService.getAllProducts();
+        res.status(200).json(products);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            error: 'Something went wrong!'
+        });
     }
-  }
-};
+}
+export const saveProduct = async (req: Request, res: Response) => {
+    try {
+        const newProduct = req.body;
+        const validationError =
+            productService.validateProduct(newProduct);
+        if (validationError) {
+            res.status(400).json({
+                error: validationError
+            });
+            return;
+        }
 
-// Apply CORS middleware
-app.use(cors(corsOptions));
+        const savedProduct = await productService
+            .saveProduct(newProduct);
+        res.status(201).json(savedProduct);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            error: 'Something went wrong!'
+        });
+    }
+}
+
+export const getProduct = async (req: Request, res: Response) => {
+    const productId = parseInt(req.params.id);
+    if (isNaN(productId)) {
+        res.status(400).json({
+            error: 'Invalid Product Id'
+        });
+        return;
+    }
+    const product = await productService.getProductById(productId);
+    if (!product) {
+        res.status(404).json({
+            error: 'Product not found'
+        });
+        return;
+    }
+    res.status(200).json(product);
+}
+
+export const updateProduct = async (req: Request, res: Response) => {
+    const productId = parseInt(req.params.id);
+    if (isNaN(productId)) {
+        res.status(400).json({
+            error: 'Invalid Product Id'
+        });
+        return;
+    }
+    const updatedData = req.body;
+    const updatedProduct = await productService
+        .updateProduct(productId, updatedData);
+    if (!updatedProduct) {
+        res.status(404).json({
+            error: 'Product not found'
+        });
+        return;
+    }
+    res.status(200).json(updatedProduct);
+}
+
+export const deleteProduct = async (req: Request, res: Response) => {
+    const productId = parseInt(req.params.id);
+    if (isNaN(productId)) {
+        res.status(400).json({
+            error: 'Invalid Product Id'
+        });
+        return;
+    }
+    const deleteProduct = await productService.deleteProduct(productId);
+    if (!deleteProduct) {
+        res.status(404).json({
+            error: 'Product not found'
+        });
+        return;
+    }
+    res.status(200).json({
+        message: 'Product deleted successfully!'
+    });
+}
+```
+23. Now let's move to implement authentication and authorization using JWT.
+24. For that, we need to install JWT dependencies first.
+```shell
+npm install jsonwebtoken bcryptjs
+```
+25. Firstly, let's start with creating the Login endpoint to generate auth token for the given user credentials like below.
+```typescript
+import authRoutes from "./routes/auth.routes";
+
+// Add middleware to define auth route url pattern in app.tsx
+app.use("/api/auth", authRoutes);
+```
+```typescript
+// Create a new file called 'auth.routes.ts' inside 'routes' folder.
+import { Router } from "express";
+import {authenticateUser} from "../controller/auth.controller";
+
+const authRouter = Router();
+
+authRouter.post("/login", authenticateUser);
+
+export default authRouter;
+```
+```typescript
+// Define auth controller inside controllers/auth.controller.ts
+import {Request, Response} from "express";
+import * as authService from '../services/auth.service';
+
+export const authenticateUser = (req: Request, res: Response) => {
+    const {username, password} = req.body;
+    const authTokens = authService.authenticateUser(username, password);
+
+    if (!authTokens) {
+        res.status(401).json({error: "Invalid credentials"});
+        return;
+    }
+    res.json(authTokens);
+}
+```
+```typescript
+// Define user model inside folder called `model` as `user.model.ts`.
+export interface User {
+    id: number;
+    username: string;
+    password: string;
+    role: string;
+}
+```
+```dotenv
+PORT=3000
+MONGO_DB_URL=mongodb+srv://appuser:appuser123@oshopcluster.1waqtoo.mongodb.net/oshop?retryWrites=true&w=majority&appName=OshopCluster&authSource=admin
+JWT_SECRET=OShopJwtSecret // Define JWT_SECRET
+REFRESH_TOKEN_SECRET=OshopResetTokenSecret // Define REFRESH_TOKEN_SECRET
+```
+```typescript
+// auth.service.ts
+// Define Auth service implementation
+import {User} from "../model/user.model";
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const JWT_SECRET = process.env.JWT_SECRET as string;
+const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET as string;
+
+const refreshTokens = new Set<string>();
+
+const adminUser: User = {
+    id: 1,
+    username: "admin",
+    password: bcrypt.hashSync("1234", 10),
+    role: "admin"
+}
+
+const customerUser: User = {
+    id: 2,
+    username: "customer",
+    password: bcrypt.hashSync("1234", 10),
+    role: "customer"
+}
+const userList: User[] = [];
+userList.push(adminUser);
+userList.push(customerUser);
+
+export const authenticateUser = (username: string, password: string) => {
+    const existingUser: User | undefined = userList.find(user => user.username === username);
+
+    let isValidPassword = undefined != existingUser
+        && bcrypt.compareSync(password, existingUser.password);
+    if (!existingUser || !isValidPassword) {
+        return null;
+    }
+
+    const accessToken = jwt.sign({
+        id: existingUser.id,
+        username: existingUser.username,
+        role: existingUser.role
+    }, JWT_SECRET, {expiresIn: "5m"});
+
+    const refreshToken = jwt.sign({
+        username: existingUser.username
+    }, REFRESH_TOKEN_SECRET, {expiresIn: "7d"});
+    refreshTokens.add(refreshToken);
+    return {accessToken, refreshToken}
+}
 ```

@@ -1,5 +1,6 @@
-import express, {Express, Request, Response} from "express";
+import express, {Express} from "express";
 import productRoutes from "./routes/product.routes";
+import authRoutes from "./routes/auth.routes";
 import cors from "cors";
 
 // 1. Initialize the express app
@@ -26,6 +27,7 @@ const corsOptions = {
 };
 app.use(cors(corsOptions)); // Enable/Allow CORS according to defined options
 
+app.use("/api/auth", authRoutes)
 app.use("/api/products", productRoutes)
 
 // Expert the app to use outside (in index.ts)

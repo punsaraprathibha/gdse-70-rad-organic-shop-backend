@@ -1,12 +1,3 @@
-//
-// export interface Product {
-//     id: number;
-//     name: string;
-//     price: number;
-//     currency: string;
-//     image: string;
-// }
-
 import mongoose from "mongoose";
 
 const ProductModel
